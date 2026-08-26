@@ -24,7 +24,7 @@ jobs:
           python-version: "3.x"
 
       - name: Install MkDocs
-        run: pip install mkdocs
+        run: pip install mkdocs-material
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
