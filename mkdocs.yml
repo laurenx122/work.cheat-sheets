@@ -1,4 +1,4 @@
-site_name: My Project Documentation
+site_name: DevOps Cheatsheets
 
 nav:
   - CKAD: ckad-cheatsheet.md
