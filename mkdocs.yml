@@ -1,4 +1,5 @@
 site_name: DevOps Cheatsheets
+site_url: https://laurenx122.github.io/work.cheat-sheets/
 
 nav:
   - CKAD: ckad-cheatsheet.md
