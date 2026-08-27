@@ -1,7 +1,6 @@
 # CKAD / Kubernetes Cheatsheet
 
 Certified Kubernetes Application Developer (CKAD) 
-A single reference tying together every topic in your course list: what each object does, how it connects to the others, what to look for in YAML, and the commands to inspect/troubleshoot it.
 
 ---
 
@@ -1253,3 +1252,439 @@ kubectl delete -f file.yaml
 - A Service never "knows about" a Deployment — it only watches Pod labels live, continuously.
 - Use `--dry-run=client -o yaml` constantly — it's the fastest way to scaffold correct YAML under time pressure.
 - `kubectl explain` beats trying to remember exact field names/nesting.
+
+---
+
+## 15. Visual Roadmap — One Diagram Per Lesson
+
+> Same nesting style you use for the AWS EKS cheatsheet — a containment/flow diagram per lesson group, matched against your actual course TOC, with a one-line description per node below each diagram.
+
+### 15.0 Course Roadmap (how the whole course flows)
+
+```
+🧱 Core Concepts               (architecture + the core objects: Pod → RS → Deployment → Namespace)
+ └─ 🛠️ Configuration            (everything you can tune on a Pod: env, secrets, security, scheduling)
+      └─ 🧩 Multi-Container Pods (patterns for combining containers inside one Pod)
+           └─ 👀 Observability   (probes, logs, metrics — is it healthy?)
+                └─ 🎨 POD Design  (labels, rollout strategies, Jobs/CronJobs)
+                     └─ 💾 State Persistence  (volumes → PV/PVC → StatefulSets)
+                          └─ 🌐 Services & Networking  (NetworkPolicy, Ingress — traffic in/between Pods)
+                               └─ 🔐 Security  (AuthN/AuthZ, RBAC, CRDs/Operators)
+                                    └─ ⎈ Helm Fundamentals  (packaging manifests)
+                                         └─ 🧵 Kustomize Basics  (patching manifests, no templating)
+                                          
+```
+
+- **Core Concepts** – the foundation: what a Pod/ReplicaSet/Deployment/Namespace actually is.
+- **Configuration** – every knob you can turn on a Pod spec (env vars, ConfigMaps, Secrets, security, scheduling).
+- **Multi-Container Pods** – patterns for running more than one container per Pod (sidecar, init, etc.).
+- **Observability** – how you know a Pod is actually healthy (probes, logs, metrics).
+- **POD Design** – how workloads get labeled, rolled out, and run on a schedule.
+- **State Persistence** – how Pods keep data that survives restarts.
+- **Services & Networking** – how traffic gets to Pods and how Pods are firewalled from each other.
+- **Security** – who can authenticate, what they're authorized to do, and how the API itself can be extended.
+- **Helm Fundamentals / Kustomize Basics** – the two main ways to package and customize manifests for reuse.
+
+---
+
+### 15.1 Core Concepts
+
+```
+🧱 Core Concepts (builds up one layer at a time)
+ └─ 🏛️ Recap Architecture
+      → control plane (API server, etcd, scheduler, controller-manager) + worker node components (kubelet, kube-proxy)
+      └─ 🐳 Docker vs ContainerD
+           → the container runtime underneath every Pod; ContainerD is the lighter-weight, CRI-native choice
+           └─ ⚠️ A Note on Docker Deprecation
+                → kubelet no longer talks to Docker directly (dockershim removed) — it talks via CRI
+                └─ 📦 Recap Pods
+                     → the smallest deployable unit: one or more containers sharing network/storage
+                     └─ 📝 Recap Pods with YAML
+                          → declarative Pod definitions (apiVersion/kind/metadata/spec)
+                          └─ 🎬 Recap Demo: Creating Pods with YAML
+                               → hands-on: write and apply a Pod manifest
+                               └─ 🎯 Solution: Pods (optional)
+                                    → practice check
+                                    └─ 🌀 Recap ReplicaSets
+                                         → keeps N Pod replicas alive, replaces dead ones automatically
+                                         └─ 🎯 Solution: ReplicaSets (optional)
+                                              └─ 🚀 Recap Deployments
+                                                   → manages ReplicaSets, adds rolling updates + rollbacks
+                                                   └─ 🎯 Solution: Deployments (optional)
+                                                        └─ 📂 Recap Namespaces
+                                                             → logical isolation boundary within one cluster
+                                                             └─ 🎯 Solution: Namespaces (optional)
+                                                                  └─ ⌨️ Solution: Imperative Commands (optional)
+                                                                       → fast object creation without writing YAML by hand
+                                                                       └─ 🔔 A Quick Reminder
+                                                                            → recap wrap-up before moving to Configuration
+```
+
+- **Recap Architecture** – control plane (AWS/you-don't-manage-it-here, it's on-prem/self-hosted context) vs worker nodes; the components that make a cluster run.
+- **Docker vs ContainerD** – the container runtime layer; know both since exam clusters may use either.
+- **A Note on Docker Deprecation** – Kubernetes talks to runtimes via CRI now, not directly to Docker.
+- **Recap Pods** – the atomic unit of deployment; one or more containers that share network and storage.
+- **Recap Pods with YAML** – writing a Pod manifest by hand (`apiVersion`, `kind`, `metadata`, `spec`).
+- **Recap Demo: Creating Pods with YAML** – guided walkthrough of applying that manifest.
+- **Solution: Pods** – practice exercise check.
+- **Recap ReplicaSets** – the controller that guarantees N replicas of a Pod stay running.
+- **Solution: ReplicaSets** – practice exercise check.
+- **Recap Deployments** – wraps a ReplicaSet with rolling updates, rollbacks, and revision history.
+- **Solution: Deployments** – practice exercise check.
+- **Recap Namespaces** – how one cluster is logically divided for isolation/multi-tenancy.
+- **Solution: Namespaces** – practice exercise check.
+- **Solution: Imperative Commands** – speed techniques for creating objects via `kubectl run`/`create` instead of YAML.
+- **A Quick Reminder** – short recap before moving into Configuration.
+
+---
+
+### 15.2 Configuration
+
+```
+🛠️ Configuration (every independent knob on a Pod spec)
+ ├─ 🖼️ Define, build and modify container images
+ │     → the image itself: what goes into it before it ever reaches Kubernetes
+ ├─ ⌨️ Commands and Arguments in Docker
+ │     → ENTRYPOINT (fixed executable) vs CMD (default, overridable args)
+ ├─ ⌨️ Commands and Arguments in Kubernetes
+ │     → command: overrides ENTRYPOINT, args: overrides CMD
+ │     └─ 🎯 Solution: Commands and Arguments (optional)
+ ├─ 🌱 Environment Variables
+ │     → env:, valueFrom (secretKeyRef/configMapKeyRef)
+ ├─ 🗺️ ConfigMaps
+ │     → externalize non-sensitive config, decoupled from the image
+ │     └─ 🎯 Solution: ConfigMaps (optional)
+ ├─ 🔐 Secrets
+ │     → sensitive config, base64-encoded (not encrypted) in etcd by default
+ │     └─ 🎯 Solution: Secrets (optional)
+ │          └─ 🔒 Demo: Encrypting Secret Data at Rest
+ │               → configuring EncryptionConfiguration on the API server
+ ├─ 🐋 Pre-requisite: Security in Docker
+ │     → Linux users/groups/capabilities background, needed before Security Contexts make sense
+ ├─ 🛡️ Security Contexts
+ │     → runAsUser/fsGroup/capabilities at Pod- or container-level
+ │     └─ 🎯 Solutions: Security Contexts
+ ├─ ⚖️ Resource Requirements
+ │     → requests (scheduling) vs limits (hard ceiling); OOMKilled vs throttling
+ │     └─ 🎯 Solutions: Resource Requirements
+ ├─ 🪪 Service Account
+ │     → Pod identity for talking to the API server
+ │     └─ 🎯 Solutions: Service Account
+ ├─ 🚫 Taints and Tolerations
+ │     → repel Pods from Nodes unless they explicitly tolerate the taint
+ │     └─ 🎯 Solution: Taints and Tolerations (optional)
+ ├─ 🎯 Node Selectors / Logging
+ │     → simplest way to pin a Pod to Nodes matching a label
+ ├─ 🧲 Node Affinity
+ │     → richer rules (required/preferred) for attracting Pods to specific Nodes
+ │     └─ 🎯 Solution: Node Affinity (optional)
+ └─ ⚔️ Taints/Tolerations vs Node Affinity
+       → repel (Node's perspective) vs attract (Pod's perspective) — use both together to fully dedicate a Node
+```
+
+- **Define, build and modify container images** – the image-build layer that happens before anything touches Kubernetes.
+- **Commands and Arguments in Docker** – ENTRYPOINT vs CMD at the Docker level.
+- **Commands and Arguments in Kubernetes** – how `command:`/`args:` in a Pod spec override those Docker defaults.
+- **Environment Variables** – injecting config into containers via `env:`, from literals, ConfigMaps, or Secrets.
+- **ConfigMaps** – externalized non-sensitive configuration, decoupled from the container image.
+- **Secrets** – externalized sensitive configuration; base64 by default, needs KMS/encryption config for real protection.
+- **Demo: Encrypting Secret Data at Rest** – hands-on setup of API server encryption for Secrets.
+- **Pre-requisite: Security in Docker** – background on Linux users/groups/capabilities before Security Contexts.
+- **Security Contexts** – controls which user/group a container runs as and what Linux capabilities it holds.
+- **Resource Requirements** – `requests`/`limits` for CPU and memory, and what happens when each is exceeded.
+- **Service Account** – the identity a Pod uses to authenticate to the Kubernetes API itself.
+- **Taints and Tolerations** – Node-side repulsion; only Pods with a matching toleration can (or must) land there.
+- **Node Selectors** – simplest Pod-side attraction mechanism, exact label match only.
+- **Node Affinity** – more expressive Pod-side attraction, with hard and soft rules.
+- **Taints/Tolerations vs Node Affinity** – comparison of the two scheduling mechanisms and when to combine them.
+
+---
+
+### 15.3 Multi-Container Pods
+
+```
+🧩 Multi-Container Pods
+ └─ 🤝 Multi Container Pods
+      → patterns: sidecar, ambassador, adapter, init container — containers sharing network/storage in one Pod
+      └─ 🎯 Solution: Init Containers (optional)
+           → practice exercise check
+```
+
+- **Multi Container Pods** – design patterns for combining containers in one Pod, plus init containers that must finish before app containers start.
+- **Solution: Init Containers** – practice exercise check.
+
+---
+
+### 15.4 Observability
+
+```
+👀 Observability
+ └─ 💓 Readiness Probes
+      → "is this container ready for traffic?" — failure pulls it out of Service endpoints
+      └─ ❤️ Liveness Probes
+           → "is this container still alive?" — failure restarts the container
+           └─ 🎯 Solution: Readiness and Liveness Probes
+                └─ 📜 Logging
+                     → kubectl logs, per-container logs, --previous for crash logs
+                     └─ 🎯 Solution: Logging (optional)
+                          └─ 📊 Monitoring
+                               → Metrics Server + kubectl top; no full monitoring stack built in
+                               └─ 🎯 Solution: Monitoring (optional)
+```
+
+- **Readiness Probes** – determines whether a Pod should receive traffic right now; failing removes it from Service endpoints without restarting it.
+- **Liveness Probes** – determines whether a container is still functioning; failing triggers a restart.
+- **Solution: Readiness and Liveness Probes** – practice exercise check.
+- **Logging** – `kubectl logs` and its flags for multi-container and crashed Pods.
+- **Solution: Logging** – practice exercise check.
+- **Monitoring** – Metrics Server as the baseline, `kubectl top` for quick resource usage checks.
+- **Solution: Monitoring** – practice exercise check.
+
+---
+
+### 15.5 POD Design
+
+```
+🎨 POD Design
+ ├─ 🏷️ Labels, Selectors, Annotations
+ │     → labels identify/group objects (used by selectors); annotations are non-selectable metadata
+ │     └─ 🎯 Solution: Labels and Selectors (optional)
+ ├─ 🔄 Rolling Updates & Rollbacks
+ │     → Deployment's default strategy — gradual, zero-downtime Pod replacement
+ │     └─ 🎯 Solution: Rolling Updates and Rollbacks (optional)
+ ├─ 🔵🟢 Deployment Strategy: Blue-Green
+ │     → two full environments; cut traffic over by swapping a Service's selector all at once
+ ├─ 🐤 Deployment Strategy: Canary
+ │     → partial traffic to the new version first, via two Deployments sharing one Service selector
+ │     └─ 🎯 Solution: Deployment Strategies (optional)
+ └─ ⏰ Jobs & Cron Jobs
+       → run-to-completion (Job) or scheduled (CronJob) Pods, not "always on" like a Deployment
+       └─ 🎯 Solution: Jobs and CronJobs (optional)
+```
+
+- **Labels, Selectors, Annotations** – how objects are tagged, grouped, and matched (labels) vs just documented (annotations).
+- **Solution: Labels and Selectors** – practice exercise check.
+- **Rolling Updates & Rollbacks** – the default, built-in Deployment update strategy and how to reverse it.
+- **Solution: Rolling Updates and Rollbacks** – practice exercise check.
+- **Deployment Strategy: Blue-Green** – manual strategy, all traffic switches at once via Service selector swap.
+- **Deployment Strategy: Canary** – manual strategy, gradual traffic shift via shared Service selector across two Deployments.
+- **Solution: Deployment Strategies** – practice exercise check.
+- **Jobs** – run a Pod to completion a set number of times, with retry/parallelism control.
+- **Cron Jobs** – schedule Jobs to run on a cron expression.
+- **Solution: Jobs and CronJobs** – practice exercise check.
+
+---
+
+### 15.6 State Persistence
+
+```
+💾 State Persistence (builds from Docker storage fundamentals up to StatefulSets)
+ └─ 🐳 Introduction to Docker Storage
+      → storage drivers, image layers — the foundation underneath K8s volumes
+      └─ 📦 Storage in Docker
+           → volumes and bind mounts at the Docker level
+           └─ 🔌 Volume Driver Plugins in Docker
+                → pluggable storage backends Docker itself supports
+                └─ 📁 Volumes in Kubernetes
+                     → Pod-level, tied to the Pod's own lifetime (e.g. emptyDir)
+                     └─ 🗄️ Persistent Volumes
+                          → cluster-wide storage pool, provisioned independently of any one Pod
+                          └─ 📋 Persistent Volume Claims
+                               → a developer's namespaced request for a slice of that pool
+                               └─ 🎯 Solution: PV and PVC (optional)
+                                    └─ 🏷️ Storage Classes
+                                         → dynamic provisioning — PV created automatically on demand
+                                         └─ ❓ Why StatefulSets
+                                              → the problem: Deployments give Pods random names + no fixed storage
+                                              └─ 🔢 StatefulSets Introduction
+                                                   → stable, ordered Pod names + per-Pod persistent identity
+                                                   └─ 👻 Headless Services
+                                                        → required for StatefulSet Pod-to-Pod DNS discovery
+                                                        └─ 💽 Storage in StatefulSets
+                                                             → volumeClaimTemplates — each Pod gets its own PVC
+```
+
+- **Introduction to Docker Storage** – how Docker's storage drivers and image layers work underneath everything.
+- **Storage in Docker** – Docker-level volumes and bind mounts.
+- **Volume Driver Plugins in Docker** – pluggable backends for Docker storage.
+- **Volumes in Kubernetes** – Pod-scoped volumes like `emptyDir`, tied to the Pod's own lifetime.
+- **Persistent Volumes** – cluster-wide storage resources, provisioned independently of any single Pod.
+- **Persistent Volume Claims** – a namespaced request that binds to a PV meeting its size/access-mode/class requirements.
+- **Solution: Persistent Volumes and Persistent Volume Claims** – practice exercise check.
+- **Storage Classes** – enables dynamic PV provisioning so admins don't manually create every PV.
+- **Why Stateful Sets** – the gap Deployments leave for apps needing stable identity and storage.
+- **Stateful Sets Introduction** – stable Pod names, ordered creation/deletion, per-Pod persistent storage.
+- **Headless Services** – gives each StatefulSet Pod its own resolvable DNS name instead of one shared virtual IP.
+- **Storage in StatefulSets** – `volumeClaimTemplates`, so every StatefulSet Pod automatically gets its own PVC.
+
+---
+
+### 15.7 Certification Tips
+
+```
+📝 Certification Tips
+ └─ ⏱️ Time Management
+      → exam pacing strategy: flag-and-move-on, lean on imperative commands + --dry-run=client to save time
+```
+
+- **Time Management** – strategies for pacing yourself through the CKAD exam and using speed techniques under pressure.
+
+---
+
+### 15.8 Helm Fundamentals
+
+```
+⎈ Helm Fundamentals
+ └─ 📖 Helm Introduction
+      → the concept: Chart (package) + Release (deployed instance) + Repository (where charts live)
+      └─ 💿 Install Helm
+           → getting the helm CLI onto your machine
+           └─ 🎯 Solution: Install Helm
+                └─ 🧠 Helm Concept
+                     → templating, values.yaml, chart structure in depth
+                     └─ 🎯 Solution: Helm Concepts
+```
+
+- **Helm Introduction** – the core mental model: Charts are packages, Releases are deployed instances, Repositories host Charts.
+- **Install Helm** – getting the `helm` CLI set up.
+- **Solution: Install Helm** – practice exercise check.
+- **Helm Concept** – deeper look at chart structure, templating, and `values.yaml`.
+- **Solution: Helm Concepts** – practice exercise check.
+
+---
+
+### 15.9 (2025 Updates) Kustomize Basics
+
+```
+🧵 Kustomize Basics
+ └─ ⚖️ Kustomize vs Helm
+      → patch plain YAML declaratively (no templating language) vs Helm's full templating engine
+      └─ ⚙️ Installation/Setup
+           → getting kustomize working (built into kubectl via -k)
+           └─ 📤 Kustomize Output
+                → kubectl kustomize renders the final YAML without applying it
+                └─ 🗂️ Managing Directories
+                     → base/ (generic manifests) + overlays/ (per-environment patches) layout
+                     └─ 🎬 Managing Directories Demo
+                          → hands-on: structuring a base + overlay project
+                          └─ 🔧 Common Transformers
+                               → namePrefix, commonLabels, namespace — bulk-modify every resource at once
+                               └─ 🖼️ Image Transformers
+                                    → swap out image name/tag across resources without editing them
+                                    └─ 🎬 Transformers Demo
+                                         → hands-on: applying transformers to a real project
+                                         └─ 🩹 Patches Intro
+                                              → the concept: targeted changes to one field on one resource
+                                              └─ 🧬 Different Types of Patches
+                                                   → JSON 6902 (op/path/value) vs strategic merge patch
+                                                   └─ 📖 Patches: Dictionary
+                                                        → patching map-style fields (e.g. labels, annotations)
+                                                        └─ 📃 Patches: List
+                                                             → patching array-style fields (e.g. containers, ports)
+                                                             └─ 🎭 Overlays
+                                                                  → dev/prod variations built on the same base
+                                                                  └─ 🧩 Components
+                                                                       → reusable partial configuration shared across overlays
+```
+
+- **Kustomize vs Helm** – Kustomize patches plain YAML with no templating language; Helm is a full templating engine.
+- **Installation/Setup** – Kustomize ships built into `kubectl` via the `-k` flag.
+- **Kustomize Output** – `kubectl kustomize <dir>` renders the final merged YAML without applying it.
+- **Managing Directories** – the standard `base/` + `overlays/<env>/` project layout.
+- **Managing Directories Demo** – hands-on walkthrough of that layout.
+- **Common Transformers** – bulk modifications like `namePrefix`, `commonLabels`, `namespace` applied across every resource.
+- **Image Transformers** – swap container image names/tags without touching the base manifests.
+- **Transformers Demo** – hands-on walkthrough applying transformers.
+- **Patches Intro** – the concept of targeted, surgical changes to a specific resource field.
+- **Different Types of Patches** – JSON 6902 (`op`/`path`/`value`) vs strategic merge patch style.
+- **Patches Dictionary** – patching map-shaped fields like labels or annotations.
+- **Patches List** – patching array-shaped fields like `containers` or `ports`.
+- **Overlays** – environment-specific variations (dev/prod) layered on top of one shared base.
+- **Components** – reusable configuration snippets that multiple overlays can opt into.
+
+---
+
+### 15.10 
+
+---
+
+### 15.11 Services & Networking
+
+```
+🌐 Services & Networking
+ └─ 🛡️ Network Policies
+      → firewall rules BETWEEN Pods; deny-by-default the moment a policy selects a Pod
+      └─ ✍️ Developing network policies
+           → hands-on authoring: default-deny, then scoped allow rules
+           └─ 🎯 Solution: Network Policies (optional)
+                └─ 🚦 Ingress Networking
+                     → L7 HTTP(S) routing INTO Services (host/path based), needs an Ingress Controller + Ingress Resource
+                     ├─ 🎯 Solution: Ingress Networking 1
+                     └─ 🎯 Solution: Ingress Networking 2
+```
+
+- **Network Policies** – Kubernetes-level firewall rules controlling which Pods can talk to which, enforced by a compatible CNI.
+- **Developing network policies** – hands-on practice writing and testing policy YAML.
+- **Solution: Network Policies** – practice exercise check.
+- **Ingress Networking** – Layer 7 HTTP/HTTPS routing into Services, requiring both an Ingress Controller (software) and Ingress Resources (rules).
+- **Solution: Ingress Networking 1 / 2** – practice exercise checks.
+
+---
+
+### 15.12 Security
+
+```
+🔐 Security (linear build: identity → permissions → API-server internals → extending the API)
+ └─ 🔑 Authentication
+      → "who are you?" — Users (external certs/tokens) or ServiceAccounts (internal, token-based)
+      └─ 📄 KubeConfig
+           → client-side config bundling clusters + users into contexts
+           └─ 🎯 Solution: KubeConfig
+                └─ 🗂️ API Groups
+                     → how the API server organizes resources (core, apps, batch, networking, rbac, etc.)
+                     └─ 🚪 Authorization
+                          → "what are you allowed to do?" — RBAC (most common), ABAC, or Webhook
+                          └─ 👤 Role Based Access Controls
+                               → Role + RoleBinding — namespace-scoped permissions
+                               └─ 🎯 Solution: Role Based Access Controls
+                                    └─ 🌍 Cluster Roles
+                                         → ClusterRole + ClusterRoleBinding — cluster-wide permissions
+                                         └─ 🎯 Solution: Cluster Roles
+                                              └─ 🚧 Admission Controllers
+                                                   → intercept requests after AuthN/AuthZ, before etcd persistence
+                                                   └─ 🎯 Solution: Admission Controllers
+                                                        └─ ✅✏️ Validating and Mutating Admission Controllers
+                                                             → accept/reject vs modify-in-flight
+                                                             └─ 🎯 Solution: Validating and Mutating Admission Controllers
+                                                                  └─ 🔢 API Versions
+                                                                       → alpha / beta / stable maturity levels
+                                                                       └─ ⏳ API Deprecations
+                                                                            → how/when old API versions get retired
+                                                                            └─ 🎯 Solution: API Versions/Deprecations
+                                                                                 └─ 🧬 Custom Resource Definition
+                                                                                      → teaches the API server a brand-new kind
+                                                                                      └─ 🎮 Custom Controllers
+                                                                                           → watches CRs, reconciles real state to match desired state
+                                                                                           └─ 🤖 Operator Framework
+                                                                                                → a custom controller + domain-specific operational knowledge
+```
+
+- **Authentication** – establishing identity: human Users (external) vs ServiceAccounts (in-cluster, token-based).
+- **KubeConfig** – the client-side file bundling cluster/user/namespace into switchable contexts.
+- **Solution: KubeConfig** – practice exercise check.
+- **API Groups** – how the Kubernetes API itself is organized into groups like `apps`, `batch`, `rbac.authorization.k8s.io`.
+- **Authorization** – deciding what an authenticated identity is allowed to do — RBAC, ABAC, or Webhook.
+- **Role Based Access Controls** – `Role` + `RoleBinding`, scoped to a single namespace.
+- **Solution: Role Based Access Controls** – practice exercise check.
+- **Cluster Roles** – `ClusterRole` + `ClusterRoleBinding`, scoped cluster-wide (or reusable within one namespace via a RoleBinding).
+- **Solution: Cluster Roles** – practice exercise check.
+- **Admission Controllers** – plugins that intercept API requests after auth, before the object is persisted.
+- **Solution: Admission Controllers** – practice exercise check.
+- **Validating and Mutating Admission Controllers** – the two flavors: accept/reject vs modify-in-flight.
+- **Solution: Validating and Mutating Admission Controllers** – practice exercise check.
+- **API Versions** – alpha/beta/stable maturity levels and what they mean for stability.
+- **API Deprecations** – the process and timeline for retiring old API versions.
+- **Solution: API Versions/Deprecations** – practice exercise check.
+- **Custom Resource Definition** – teaches the API server a brand-new `kind` that didn't exist before.
+- **Custom Controllers** – the reconciliation loop that actually acts on instances of that new kind.
+- **Operator Framework** – a Custom Controller plus domain-specific operational knowledge (e.g., safely upgrading a database).

@@ -1,7 +1,5 @@
 # AWS EKS Cheatsheet
 
-> Companion to your CKAD cheatsheet. Same idea: big picture first, then drill into every layer with concept tables before commands, and worked examples instead of blank templates.
-
 ---
 
 ## 0. The Big Picture — How Everything Connects
