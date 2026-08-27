@@ -977,3 +977,206 @@ kubectl get svc web -n prod -w   # wait for EXTERNAL-IP (NLB DNS name)
 ---
 
 *Cross-reference: pair this with your `CKAD_Cheatsheet.md` and `CKAD_Command_Reference.md` for the pure-Kubernetes object-level details (Deployments, Probes, ConfigMaps, etc.) — this doc focuses on the AWS-specific layer wrapped around vanilla Kubernetes.*
+
+---
+
+## 12. Visual Roadmap — One Diagram Per Lesson
+
+> Same nesting style as Section 0, but scoped to each lesson group so you can visualize how its subsections relate to each other before you dive into the detailed write-ups above. Each diagram is followed by a one-line description per node.
+
+### 12.0 Course Roadmap (how the whole course flows)
+
+```
+🎬 Introduction
+ └─ 🧠 EKS Fundamentals            (build the mental model)
+      └─ 🌐 EKS Networking          (how pods get IPs & talk to each other)
+           └─ 💾 EKS Storage         (how pods keep data)
+                └─ 🔐 EKS Secrets    (how pods get credentials safely)
+                     └─ ⚖️ Load Balancers   (how traffic gets IN)
+                          └─ ⚙️ Compute & Scaling   (what actually runs the pods)
+                               └─ 🛡️ Redundancy & Resiliency   (how it survives failure + who's allowed in)
+                                    └─ 🔧 Upgrades & Maintenance   (how you keep it healthy long-term)
+```
+
+- **Introduction** – orientation: what the course covers and how it's structured.
+- **EKS Fundamentals** – the "what/why/how" of EKS before touching any config.
+- **EKS Networking** – pod IP assignment, scaling IPs, and pod-to-pod firewalling.
+- **EKS Storage** – attaching persistent/shared disks to pods.
+- **EKS Secrets** – keeping credentials out of plaintext and out of git.
+- **Load Balancers** – getting external traffic routed into the cluster.
+- **Compute & Scaling** – the actual EC2/Fargate muscle running your workloads, and how it grows/shrinks.
+- **Redundancy & Resiliency** – surviving failure (multi-AZ, access control) and giving pods safe AWS permissions.
+- **Upgrades & Maintenance** – keeping the whole thing patched, monitored, and current without breaking prod.
+
+---
+
+### 12.1 Introduction
+
+```
+🎬 Introduction
+ └─ 📖 Course Introduction
+      → orientation: what EKS is, what this course covers, and the order topics build on each other
+```
+
+- **Course Introduction** – sets expectations: this is a broad AWS-managed-Kubernetes course, so concepts stack (fundamentals → networking → storage → secrets → LB → compute → resiliency → upgrades), same as this cheatsheet's structure.
+
+---
+
+### 12.2 EKS Fundamentals
+
+```
+🧠 EKS Fundamentals (your mental model, built layer by layer)
+ ├─ ❓ What is EKS              → the DEFINITION: managed K8s control plane
+ ├─ 🎯 Common Use Cases         → the WHY: when EKS is the right tool
+ ├─ 🏗️ Architecture             → the HOW IT'S BUILT
+ │     ├─ 🏢 Control Plane (AWS's VPC, AWS-managed: API server, etcd, scheduler)
+ │     └─ 🖥️ Data Plane (YOUR VPC: nodes/Fargate running your pods)
+ ├─ 🚀 Deployment Options       → the HOW YOU RUN NODES: self-managed / managed / Fargate / Auto Mode
+ ├─ 🛠️ Tools needed             → the HOW YOU INTERACT: aws-cli, kubectl, eksctl, helm, Terraform
+ ├─ 🌐 Networking (intro)       → the HOW PODS GET IPs: real VPC IPs via CNI, not an overlay
+ └─ 🔑 Authentication           → the WHO CAN LOG IN: IAM identity → aws-auth/Access Entries → RBAC
+```
+
+- **What is EKS** – AWS-managed Kubernetes control plane; you get upstream, conformant K8s without running etcd/API server yourself.
+- **Common Use Cases** – microservices, batch/ML, hybrid-cloud, cost-sensitive spiky workloads, regulated environments.
+- **Architecture** – split between AWS-managed control plane and your self-managed (or Fargate) data plane.
+- **Deployment Options** – choose how nodes are provisioned: self-managed EC2, managed node groups, Fargate, or EKS Auto Mode.
+- **Tools needed for EKS** – the CLI/toolchain stack you'll use daily: `aws`, `kubectl`, `eksctl`, `helm`, Terraform.
+- **Networking** – pods get real, routable VPC IPs (not a fake overlay network) — this is EKS's biggest networking difference from vanilla K8s.
+- **Authentication** – IAM identity is translated into a Kubernetes identity (via aws-auth ConfigMap or Access Entries), then RBAC decides permissions.
+
+---
+
+### 12.3 EKS Networking
+
+```
+🌐 EKS Networking (each concept builds on the one above it)
+ └─ 🔌 How networking works
+      → VPC CNI attaches ENIs to nodes, hands pods real secondary IPs
+      └─ 📇 Prefix Delegation
+           → stretch 1 IP-per-ENI-slot into a /28 (16 IPs) per slot — way more pods per node
+           └─ 🧬 IPv6
+                → skip IPv4 exhaustion entirely; prefix delegation becomes mandatory/automatic
+                └─ 🛡️ Network Policies
+                     → once pods HAVE IPs, control which pods can talk to which (deny-by-default firewall)
+                     └─ 🎬 Network Policies Demo
+                          → hands-on: apply default-deny, confirm traffic blocked, add allow-rule, confirm traffic flows
+```
+
+- **How networking works** – the VPC CNI plugin (`aws-node` DaemonSet) gives every pod a real, routable VPC IP pulled from node ENIs.
+- **Prefix Delegation** – instead of 1 IP per ENI slot, assigns a `/28` prefix (16 IPs) per slot, massively raising max-pods-per-node.
+- **IPv6** – cluster created IPv6-only from the start; solves IP exhaustion permanently, prefix delegation is automatic here.
+- **Network Policies** – Kubernetes-level firewall between pods, enforceable natively by the VPC CNI (no Calico required) once enabled.
+- **Network Policies Demo** – practical walkthrough: default-deny-all → verify blocked → add scoped allow rule → verify it works.
+
+---
+
+### 12.4 EKS Storage
+
+```
+💾 EKS Storage (pick based on access pattern, not preference)
+ ├─ 📀 EBS – Elastic Block Store
+ │     → single-AZ, ReadWriteOnce, block storage → databases, single-writer stateful apps
+ ├─ 📁 EFS – Elastic File System
+ │     → multi-AZ, ReadWriteMany, NFS storage → shared config, uploads, ML datasets across many pods
+ └─ 🗄️ EKS Other Storage
+       → emptyDir (scratch), hostPath (rare), FSx for Lustre (HPC), S3 (via SDK/Mountpoint, not a real PVC)
+```
+
+- **EBS (Elastic Block Store)** – fast, single-AZ block storage; one pod writes at a time; classic choice for databases.
+- **EFS (Elastic File System)** – NFS-based, multi-AZ, many pods can read/write simultaneously; needs mount targets pre-created per AZ.
+- **EKS Other Storage** – covers `emptyDir`/`hostPath` (no AWS backing) and specialty drivers like FSx for Lustre (HPC/ML) or S3 access from app code.
+
+---
+
+### 12.5 EKS Secrets
+
+```
+🔐 EKS Secrets
+ └─ 🗝️ EKS Secrets Intro
+      → base64 in etcd is NOT encryption; turn on KMS envelope encryption for real protection
+      └─ 🧰 Kubernetes Secrets Options
+           → native Secret → native+KMS → Secrets Manager CSI → SSM Parameter Store CSI → External Secrets Operator
+             (each step right = more secure / more feature-rich / less "stored in etcd at all")
+```
+
+- **EKS Secrets Intro** – native K8s Secrets are only base64-encoded by default; enabling KMS envelope encryption protects the etcd-at-rest copy.
+- **Kubernetes Secrets Options** – a spectrum from plain native Secrets, up through KMS encryption, up through pulling secrets live from AWS Secrets Manager/SSM (so they never even live in etcd), up through External Secrets Operator for GitOps sync.
+
+---
+
+### 12.6 Load Balancers
+
+```
+⚖️ Load Balancers
+ └─ 🚦 LoadBalancers Intro
+      → AWS Load Balancer Controller watches Ingress/Service objects → provisions real ALB/NLB
+      ├─ 🛣️ Gateway Ingress
+      │    → Gateway API (GatewayClass → Gateway → HTTPRoute): newer, more expressive successor to Ingress
+      └─ 🕸️ VPC Lattice
+           → app-to-app networking across VPCs/accounts with no peering — exposed via the same Gateway API
+```
+
+- **LoadBalancers Intro** – the AWS LB Controller is the bridge: `Ingress` → ALB (L7), `Service type=LoadBalancer` → NLB (L4).
+- **Gateway Ingress** – the Gateway API is the modern alternative to `Ingress`, offering multi-protocol, role-split, more granular routing — still backed by the same controller.
+- **VPC Lattice** – AWS-native service-to-service networking across VPCs/accounts without peering/Transit Gateway, plugged in via the Gateway API too.
+
+---
+
+### 12.7 Compute & Scaling
+
+```
+⚙️ Compute & Scaling
+ ├─ ☁️ Fargate
+ │    → serverless, no visible EC2, pay-per-pod, 1 pod = 1 micro-VM
+ ├─ 🖥️ EKS Node Groups
+ │    → self-managed EC2+ASG (full control) vs Managed Node Groups (AWS handles lifecycle)
+ ├─ 📈 Karpenter
+ │    → smarter/faster autoscaler: provisions right-sized nodes directly, no pre-defined ASG needed
+ └─ 🎬 Compute Demo
+      → hands-on: scale a deployment up, watch pods go Pending, watch nodes get added automatically
+```
+
+- **Fargate** – no nodes to manage at all; each pod runs in its own isolated micro-VM, billed per pod.
+- **EKS Node Groups** – choose self-managed (you build EC2/ASG yourself) or managed (AWS automates create/update/drain/terminate).
+- **Karpenter** – watches for unschedulable pods and provisions the best-fit EC2 instance directly, faster and more flexible than Cluster Autoscaler.
+- **Compute Demo** – practical scaling exercise showing the scheduler → autoscaler → new-node feedback loop in action.
+
+---
+
+### 12.8 Redundancy & Resiliency
+
+```
+🛡️ Redundancy & Resiliency
+ ├─ 🔓 Cluster Access
+ │    → public/private/both endpoint modes, CIDR allowlisting, multi-AZ node spread + PodDisruptionBudgets
+ ├─ 🪪 IRSA (IAM Roles for Service Accounts)
+ │    → OIDC provider ↔ IAM role trust policy ↔ annotated ServiceAccount → pod assumes real AWS permissions
+ └─ 🆔 Pod Identity
+      → the newer, simpler version: one direct role↔ServiceAccount association, no OIDC annotation needed
+```
+
+- **Cluster Access** – control where the API server is reachable from (public/private/both), restrict by CIDR, and design multi-AZ node spread for workload resiliency.
+- **IRSA** – the classic way pods get scoped AWS permissions: OIDC trust + annotated ServiceAccount, no hardcoded keys.
+- **Pod Identity** – the modern replacement for IRSA; a simple association API call, no per-ServiceAccount annotation or OIDC templating.
+
+---
+
+### 12.9 Upgrades and Maintenance
+
+```
+🔧 Upgrades and Maintenance
+ └─ 👀 EKS Monitoring
+      → CloudWatch Logs (control plane) + Container Insights (nodes/pods) + AMP/AMG (Prometheus-native)
+      └─ 📅 Upgrade Cycles
+           → Standard Support (included) vs Extended Support (paid, buys extra time on older versions)
+           └─ ⬆️ EKS Upgrades
+                → strict order: control plane (one minor version at a time) → add-ons → node groups → verify
+                └─ 🧩 EKS Addon
+                     → AWS-managed lifecycle for CNI/CoreDNS/kube-proxy/CSI drivers, versioned per K8s version
+```
+
+- **EKS Monitoring** – observability stack: control plane logs via CloudWatch, node/pod metrics via Container Insights, optional Prometheus-native via AMP/AMG.
+- **Upgrade Cycles** – AWS supports a rolling window of minor versions; Extended Support (paid) lets you delay upgrades past standard end-of-life.
+- **EKS Upgrades** – the mechanical order that must be followed: control plane first (never skip a minor version), then add-ons, then node groups, then verify.
+- **EKS Addon** – AWS-managed install/upgrade lifecycle for core components (CNI, CoreDNS, kube-proxy, EBS/EFS CSI, Pod Identity Agent) instead of self-managing via Helm.
